@@ -1,5 +1,7 @@
 # encoding: utf-8
 
+import glob
+
 from ..docker_basics import *
 
 image = 'testimage'
@@ -51,7 +53,7 @@ def test_get_containers():
 
 def test_docker_exec():
     basic_setup()
-    assert docker_exec('pwd', 'toto') == '/'
+    assert docker_exec('pwd', 'toto') == '/\n'
     assert docker_exec('pwd', 'toto', status_only=True)
     assert docker_exec('wtf', 'toto', status_only=True) is False
     result = docker_exec('pwd', 'toto', stdout_only=False)
@@ -62,6 +64,7 @@ def test_docker_exec():
 
 def test_path_exists():
     basic_setup()
+    assert not path_exists('/root/a/b', 'toto')
     docker_exec('mkdir -p /root/a/b', 'toto')
     assert path_exists('/root/a/b', 'toto')
 
@@ -76,7 +79,7 @@ def test_put_data():
 
 def test_put_file():
     basic_setup()
-    file = os.path.join(ROOTDIR, 'tests/dummy.txt')
+    file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
     assert put_file(file, '/root/dummy.txt', 'toto')
     with open(file, 'r') as f:
         assert f.read() == get_data('/root/dummy.txt', 'toto')
@@ -84,10 +87,19 @@ def test_put_file():
 
 def test_set_user_permissions():
     basic_setup()
-    file = os.path.join(ROOTDIR, 'tests/dummy.txt')
+    file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
     assert put_file(file, '/root/dummy.txt', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 root root'))
     assert set_user('/root/dummy.txt', 'www-data', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 www-data root'))
+    assert set_user('/root/dummy.txt', 'www-data', 'toto', group='www-data')
+    assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 www-data www-data'))
     assert set_permissions('/root/dummy.txt', '0744', 'toto')
-    assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rwxr--r--  1 www-data root'))
+    assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rwxr--r--  1 www-data www-data'))
+
+
+def test_put_directory():
+    basic_setup()
+    put_directory('.', '/root', 'toto')
+    for file in glob.glob('*'):
+        assert path_exists(os.path.join('/root', file), 'toto')

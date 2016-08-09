@@ -91,10 +91,13 @@ class PlatformManager(object):
             raise RuntimeError("Can't remove images before running containers")
         self.reset(reset)
         running = self.get_real_containers()
+        existing = self.get_real_containers(True)
         for k, v in self.images.iteritems():
             container = self.containers[k]
             if container in running:
                 continue
+            if container in existing:
+                docker_start(container)
             else:
                 docker_run(v, container, container, self.parameters.get(k))
         return self
@@ -103,7 +106,7 @@ class PlatformManager(object):
         return get_images(self.images_names)
 
     def get_real_containers(self, all=False):
-        return get_containers(self.containers_names, all)
+        return get_containers(self.containers_names, all=all)
 
     def images_delete(self, uproot=False):
         func = image_delete_and_containers if uproot else image_delete
@@ -151,8 +154,8 @@ class PlatformManager(object):
             all conditions met by images provided in this project.
         """
         if host:
-            return utils.ssh(self.user, get_container_ip(self.containers[host]), cmd)
-        return {k: utils.ssh(self.user, get_container_ip(v), cmd) for k, v in self.containers.iteritems()}
+            return utils.ssh(cmd, get_container_ip(self.containers[host]), self.user)
+        return {k: utils.ssh(cmd, get_container_ip(v), self.user) for k, v in self.containers.iteritems()}
 
     def scp(self, source, dest, host=None):
         """ this method requires that an ssh daemon is running on the target

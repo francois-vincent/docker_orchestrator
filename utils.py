@@ -96,46 +96,35 @@ COMMAND_DEBUG = None
 class Command(object):
     """ Use this class if you want to wait and get shell command output
     """
-    # TODO rewrite with communicate
-    # http://stackoverflow.com/questions/30982217/python-popen-wait-vs-communicate-vs-calledprocesserror
-    # TODO refactor with stdin
     def __init__(self, cmd, show=COMMAND_DEBUG):
         self.show = show
         self.p = Popen(cmd, shell=True, stdout=PIPE, stderr=PIPE)
-        if show is not None:
-            self.out = cStringIO.StringIO()
-            self.err = cStringIO.StringIO()
-            t_out = threading.Thread(target=self.out_reader)
-            t_err = threading.Thread(target=self.err_reader)
-            t_out.start()
-            t_err.start()
+        self.out_buf = cStringIO.StringIO()
+        self.err_buff = cStringIO.StringIO()
+        t_out = threading.Thread(target=self.out_handler)
+        t_err = threading.Thread(target=self.err_handler)
+        t_out.start()
+        t_err.start()
         self.p.wait()
-        if show is not None:
-            t_out.join()
-            t_err.join()
+        t_out.join()
+        t_err.join()
+        self.p.stdout.close()
+        self.p.stderr.close()
+        self.stdout = self.out_buf.getvalue()
+        self.stderr = self.err_buff.getvalue()
         self.returncode = self.p.returncode
 
-    @property
-    def stdout(self):
-        if self.show:
-            return self.out.getvalue()
-        return self.p.stdout.read()
-
-    @property
-    def stderr(self):
-        if self.show:
-            return self.err.getvalue()
-        return self.p.stderr.read()
-
-    def out_reader(self):
+    def out_handler(self):
         for line in iter(self.p.stdout.readline, ''):
-            sys.stdout.write(self.show + line)
-            self.out.write(line)
+            if self.show is not None:
+                sys.stdout.write(self.show + line)
+            self.out_buf.write(line)
 
-    def err_reader(self):
+    def err_handler(self):
         for line in iter(self.p.stderr.readline, ''):
-            sys.stderr.write(self.show + 'Error: ' + line)
-            self.err.write(line)
+            if self.show is not None:
+                sys.stderr.write(self.show + 'Error: ' + line)
+            self.err_buff.write(line)
 
     def stdout_column(self, column, start=0):
         return extract_column(self.stdout, column, start)
@@ -156,28 +145,27 @@ def command_input(cmd, datain):
     return p.returncode
 
 
-def ssh(user, host, cmd, raises=True):
+def ssh(cmd, host, user='root', raises=True):
     """ Executes ssh on host if host's ~/.ssh/authorized_keys contains images/keys/unsecure_key.pub
-    :param user: usually 'root'
-    :param host: host's ip
     :param cmd: command to execute on host (beware quotes)
+    :param host: host's ip
+    :param user: usually 'root'
     :param raises: if True, will raise if return code is nonzero
     :return: string: command's stdout
     """
-    with cd(ROOTDIR):
-        ssh = Command('ssh -o StrictHostKeyChecking=no -i images/keys/unsecure_key '
-                       '{user}@{host} {cmd}'.format(**locals()))
-        if raises and ssh.returncode:
-            raise RuntimeError("Command '{}' on host {} returned an error:\n{}".format(cmd, host, ssh.stderr))
-        return ssh.stdout.strip()
+    keys = os.path.join(ROOTDIR, 'images/keys/unsecure_key')
+    ssh = Command('ssh -o StrictHostKeyChecking=no -i {keys} {user}@{host} {cmd}'.format(**locals()))
+    if ssh.returncode and raises:
+        raise RuntimeError("Command '{}' on host {} returned an error:\n{}".format(cmd, host, ssh.stderr))
+    return ssh.stdout
 
 
-def scp(source, dest, host, user):
+def scp(source, dest, host, user='root'):
     """ source and dest must be absolute paths
     """
-    with cd(ROOTDIR):
-        command('scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i images/keys/unsecure_key '
-                 '{source} {user}@{host}:{dest}'.format(**locals()))
+    keys = os.path.join(ROOTDIR, 'images/keys/unsecure_key')
+    return command('scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i {keys} '
+             '{source} {user}@{host}:{dest}'.format(**locals()))
 
 
 # =================== REMOTE HOSTS RELATED UTILITIES =======================

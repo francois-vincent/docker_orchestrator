@@ -87,6 +87,10 @@ def docker_run(image, container, host=None, parameters=None):
     return not utils.command(cmd)
 
 
+def docker_start(container):
+    return utils.command('docker start {}'.format(container))
+
+
 def docker_commit(container, image):
     return not utils.command('docker commit {} {}'.format(container, image))
 
@@ -98,7 +102,7 @@ def get_container_ip(container, raises=False):
     return docker_cmd.stdout.strip()
 
 
-def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, raises=False, strip=True):
+def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, raises=False):
     docker_cmd = 'docker exec -i {} {} {}'.format('-u {}'.format(user) if user else '', container, cmd)
     if status_only:
         return not utils.command(docker_cmd)
@@ -108,7 +112,7 @@ def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, 
             "Error while executing <{}> on {}: [{}]".
                 format(docker_cmd, container, dock.stderr.strip() or dock.returncode))
     if stdout_only:
-        return dock.stdout[:-1] if strip else dock.stdout
+        return dock.stdout
     return dock
 
 
@@ -129,7 +133,7 @@ def put_data(data, dest, container, append=False, user=None, perms=None):
 
 
 def get_data(source, container):
-    return docker_exec('cat {}'.format(source), container, raises=True, strip=False)
+    return docker_exec('cat {}'.format(source), container, raises=True)
 
 
 def put_file(source, dest, container, user=None, perms=None):
@@ -144,8 +148,13 @@ def put_file(source, dest, container, user=None, perms=None):
     return True
 
 
-def set_user(path, user, container):
-    cmd = 'chown {} {}'.format(user, path)
+def put_directory(source, dest, container):
+    with utils.cd(source):
+        return not utils.command('tar zc * | docker exec -i {} tar zx -C {}'.format(container, dest))
+
+
+def set_user(path, user, container, group=None):
+    cmd = 'chown {}{} {}'.format(user, ':{}'.format(group) if group else '', path)
     return docker_exec(cmd, container, status_only=True, raises=True)
 
 
