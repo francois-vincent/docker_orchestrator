@@ -11,13 +11,13 @@ def get_images(filter=None):
     :param filter: if string, get images names containing it, if python container, get images in this set.
     :return: a list of images names
     """
-    docker_images = utils.Command('docker images').stdout_column(0, 1)
+    images = utils.Command('docker images').stdout_column(0, 1)
     if filter:
         if isinstance(filter, basestring):
-            return [x for x in docker_images if filter in x]
+            return [x for x in images if filter in x]
         else:
-            return [x for x in docker_images if x in filter]
-    return docker_images
+            return [x for x in images if x in filter]
+    return images
 
 
 def get_containers(filter=None, image=None, all=True):
@@ -39,6 +39,20 @@ def get_containers(filter=None, image=None, all=True):
             else:
                 return [x for x in containers if x in filter]
         return containers
+
+
+def get_networks(filter=None, driver=None):
+    docker_cmd = 'docker network ls'
+    if driver:
+        networks = utils.extract_column(utils.filter_column(utils.Command(docker_cmd).stdout, 2, 1, eq=driver), 1)
+    else:
+        networks = utils.Command(docker_cmd).stdout_column(1, 1)
+    if filter:
+        if isinstance(filter, basestring):
+            return [x for x in networks if filter in x]
+        else:
+            return [x for x in networks if x in filter]
+    return networks
 
 
 def container_stop(*container):
@@ -104,6 +118,7 @@ def get_container_ip(container, raises=False):
 
 def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, raises=False):
     docker_cmd = 'docker exec -i {} {} {}'.format('-u {}'.format(user) if user else '', container, cmd)
+    # TODO should return status
     if status_only:
         return not utils.command(docker_cmd)
     dock = utils.Command(docker_cmd)
@@ -114,6 +129,21 @@ def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, 
     if stdout_only:
         return dock.stdout
     return dock
+
+
+def docker_network(name, cmd='create', raises=True):
+    allowed = ('create', 'remove')
+    if cmd not in allowed:
+        raise RuntimeError("Network command must be in {}, found {}".format(allowed, cmd))
+    ret = utils.command('docker network {} {}'.format(cmd, name))
+    if ret and raises:
+        raise RuntimeError("Could not {} network {}".format(cmd, name))
+    return not ret
+
+
+def network_connect(network, container):
+    if utils.command('docker network connect {} {}'.format(network, container)):
+        raise RuntimeError("Could not connect {} to network {}".format(container, network))
 
 
 def path_exists(path, container):

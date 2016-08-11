@@ -1,12 +1,10 @@
 # encoding: utf-8
 
-from collections import Mapping
-
 from docker_basics import *
 import utils
 
 
-class PlatformManager(object):
+class PlatformManager(utils.Sequencer):
     """
     Class in charge of bringing up a running platform and performing other docker magic
     Check existence or creates the images,
@@ -14,7 +12,8 @@ class PlatformManager(object):
     Optionally, stops and commits the containers.
     """
 
-    def __init__(self, platform, images, parameters=(), user='root', timeout=1):
+    def __init__(self, platform, images, common_parameters='', parameters={},
+                 network=None, user='root', timeout=1):
         """
         :param platform: string
         :param images: dictionary/pair iterable of container-name:image
@@ -23,12 +22,17 @@ class PlatformManager(object):
         self.images_rootdir = ROOTDIR
         self.platform_name = platform
         self.platform = self
-        self.images = images if isinstance(images, Mapping) else dict(images)
-        self.parameters = parameters if isinstance(parameters, Mapping) else dict(parameters)
+        self.network = network or platform
+        self.images = images
+        common_parameters += ' '
+        self.parameters = {k: common_parameters for k in images}
+        for k in images:
+            if k in parameters:
+                self.parameters[k] += parameters[k]
         self.user = user
         self.timeout = timeout
-        self.containers = {k: '-'.join((v, self.platform_name, k)) for k, v in self.images.iteritems()}
-        self.images_names = set(self.images.values())
+        self.containers = {k: '-'.join((v, self.platform_name, k)) for k, v in images.iteritems()}
+        self.images_names = set(images.values())
         self.containers_names = self.containers.values()
         self.managers = {}
 
@@ -45,14 +49,18 @@ class PlatformManager(object):
                 return k
         raise LookupError("container {} not found".format(container))
 
-    def setup(self, reset=None):
-        """
-        1- ensures images are created, otherwise, creates them
-        2- ensures containers are created and started otherwise creates and/or starts them
-        """
-        self.build_images(reset)
-        self.run_containers()
+    def pre_setup(self, *args):
+        return self.run_sequence(args)
+
+    def post_teardown(self, *args):
+        self.post = args
         return self
+
+    def standard_setup(self):
+        self.build_images()
+        self.setup_network()
+        self.run_containers('rm_container')
+        return self.connect_network()
 
     def reset(self, reset='rm_image'):
         """ Resets a platform
@@ -87,8 +95,6 @@ class PlatformManager(object):
         return self.images_names == set(self.get_real_images())
 
     def run_containers(self, reset=None):
-        if reset in ('rm_image', 'uproot'):
-            raise RuntimeError("Can't remove images before running containers")
         self.reset(reset)
         running = self.get_real_containers()
         existing = self.get_real_containers(True)
@@ -99,7 +105,7 @@ class PlatformManager(object):
             if container in existing:
                 docker_start(container)
             else:
-                docker_run(v, container, container, self.parameters.get(k))
+                docker_run(v, container, container, self.parameters[k])
         return self
 
     def get_real_images(self):
@@ -126,6 +132,27 @@ class PlatformManager(object):
             print(utils.yellow("Delete container {}".format(container)))
             container_delete(container)
         return self
+
+    def setup_network(self):
+        if not self.network in get_networks(self.network):
+            docker_network(self.network)
+        return self
+
+    def connect_network(self):
+        for cont in self.containers_names:
+            network_connect(self.network, cont)
+        return self
+
+    def teardown_network(self):
+        if self.network in get_networks(self.network):
+            docker_network(self.network, 'remove')
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.run_sequence(getattr(self, 'post', ()))
 
     def get_hosts(self, raises=False):
         """ Returns the dict(host, ip) of containers actually running, or raises
@@ -177,10 +204,10 @@ class PlatformManager(object):
     def ssh_get_data(self, source, host=None):
         return self.ssh('cat {}'.format(source), host)
 
-    def docker_exec(self, cmd, host=None):
+    def docker_exec(self, cmd, host=None, status_only=False):
         if host:
-            return docker_exec(cmd, self.containers[host])
-        return {k: docker_exec(cmd, v) for k, v in self.containers.iteritems()}
+            return docker_exec(cmd, self.containers[host], status_only=status_only)
+        return {k: docker_exec(cmd, v, status_only=status_only) for k, v in self.containers.iteritems()}
 
     def put_data(self, data, dest, host=None, append=False):
         containers = [self.containers[host]] if host else self.containers.itervalues()
@@ -248,10 +275,6 @@ class PlatformManager(object):
             else:
                 for w in wait_process:
                     self.wait_process(w)
-
-    def docker_diff(self):
-        # TODO this could only be useful if krakens were started in Dockerfile
-        pass
 
 
 class DeployedPlatformManager(PlatformManager):

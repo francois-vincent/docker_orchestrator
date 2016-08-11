@@ -3,7 +3,7 @@
 import os.path
 import pytest
 
-from ..utils import cd, extract_column, filter_column, command, Command
+from ..utils import cd, extract_column, filter_column, command, Command, Sequencer
 
 ROOTDIR = os.path.dirname(os.path.abspath(__file__))
 
@@ -76,3 +76,15 @@ def test_Command_show(capsys):
     assert com.stderr.strip() == '/bin/sh: 1: fancycommand: not found'
     out, err = capsys.readouterr()
     assert (out, err.strip()) == ('', prefix + 'Error: /bin/sh: 1: fancycommand: not found')
+
+
+def test_sequencer():
+    class Toto(Sequencer):
+        l = []
+        def a(self):
+            self.l.append('a')
+        def b(self, arg):
+            self.l.append(('b', arg))
+    t = Toto()
+    t.run_sequence(('a', ('b', 'x')))
+    assert t.l == ['a', ('b', 'x')]

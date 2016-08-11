@@ -31,7 +31,7 @@ def extract_column(text, column, start=0, sep=None):
     return values
 
 
-def filter_column(text, column, sep=None, **kwargs):
+def filter_column(text, column, start=0, sep=None, **kwargs):
     """ Filters (like grep) lines of text according to a specified column and operator/value
     :param text: a string
     :param column: integer >=0
@@ -48,16 +48,27 @@ def filter_column(text, column, sep=None, **kwargs):
         op = '__contains__'
     elif not op in ('startswith', 'endswith'):
         raise ValueError("Unknown filter_column operator: {}".format(op))
-    if isinstance(text, basestring):
-        text = text.splitlines()
+    lines = text.splitlines() if isinstance(text, basestring) else text
+    if start:
+        lines = lines[start:]
     values = []
-    for line in text:
+    for line in lines:
         elts = line.split(sep) if sep else line.split()
         if elts and column < len(elts):
             elt = elts[column]
             if getattr(elt, op)(value):
                 values.append(line.strip())
     return values
+
+
+class Sequencer(object):
+    def run_sequence(self, args):
+        for arg in args:
+            if isinstance(arg, basestring):
+                getattr(self, arg)()
+            else:
+                getattr(self, arg[0])(*(arg[1:]))
+        return self
 
 
 # ======================= OS RELATED UTILITIES =======================
