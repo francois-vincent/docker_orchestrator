@@ -7,8 +7,9 @@ RUN apt-get remove -y systemd
 RUN pip install --upgrade pip virtualenv
 
 # set locale to French
-RUN sed -i "/^# fr_FR.UTF-8 UTF-8/c\fr_FR.UTF-8 UTF-8" /etc/locale.gen
-RUN locale-gen fr_FR.UTF-8
+RUN sed -i "/^# en_US.UTF-8 UTF-8/c\en_US.UTF-8 UTF-8" /etc/locale.gen
+RUN locale-gen en_US.UTF-8
+COPY debian8/.bashrc /root/.bashrc
 
 # SSH
 RUN apt-get install -y openssh-server
