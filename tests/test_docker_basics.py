@@ -62,6 +62,16 @@ def test_docker_exec():
     assert result.stderr.strip() == ''
 
 
+def test_docker_exec_user():
+    basic_setup()
+    assert docker_exec('touch /root/toto', 'toto', status_only=True)
+    assert docker_exec('ls -al /root | grep toto', 'toto').startswith(('-rw-r--r--  1 root root'))
+    assert docker_exec('mkdir -p /var/www', 'toto', status_only=True)
+    assert set_user('/var/www', 'www-data', 'toto', 'www-data')
+    assert docker_exec('touch /var/www/titi', 'toto', user='www-data', status_only=True)
+    assert docker_exec('ls -al /var/www | grep titi', 'toto').startswith(('-rw-r--r--  1 www-data www-data'))
+
+
 def test_path_exists():
     basic_setup()
     assert not path_exists('/root/a/b', 'toto')
@@ -71,16 +81,16 @@ def test_path_exists():
 
 def test_put_data():
     basic_setup()
-    assert put_data(data, '/root/data.txt', 'toto')
+    put_data(data, '/root/data.txt', 'toto')
     assert get_data('/root/data.txt', 'toto') == data
-    assert put_data(data, '/root/data.txt', 'toto', append=True)
+    put_data(data, '/root/data.txt', 'toto', append=True)
     assert get_data('/root/data.txt', 'toto') == data + data
 
 
 def test_put_file():
     basic_setup()
     file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
-    assert put_file(file, '/root/dummy.txt', 'toto')
+    put_file(file, '/root/dummy.txt', 'toto')
     with open(file, 'r') as f:
         assert f.read() == get_data('/root/dummy.txt', 'toto')
 
@@ -88,7 +98,7 @@ def test_put_file():
 def test_set_user_permissions():
     basic_setup()
     file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
-    assert put_file(file, '/root/dummy.txt', 'toto')
+    put_file(file, '/root/dummy.txt', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 root root'))
     assert set_user('/root/dummy.txt', 'www-data', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 www-data root'))
@@ -100,6 +110,6 @@ def test_set_user_permissions():
 
 def test_put_directory():
     basic_setup()
-    put_directory('.', '/root', 'toto')
+    put_directory('.', '/root/subdir', 'toto')
     for file in glob.glob('*'):
-        assert path_exists(os.path.join('/root', file), 'toto')
+        assert path_exists(os.path.join('/root/subdir', file), 'toto')

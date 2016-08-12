@@ -141,18 +141,23 @@ class Command(object):
         return extract_column(self.stdout, column, start)
 
 
-def command(cmd):
-    """ Use this function if you only want the return code
-        you can't retrieve stdout nor stderr
+def command(cmd, raises=False):
+    """ Use this function if you only want the return code.
+        You can't retrieve stdout nor stderr and it never raises
     """
-    return call(cmd, shell=True)
+    ret = call(cmd, shell=True)
+    if ret and raises:
+        raise RuntimeError("Error while executing<{}>".format(cmd))
+    return ret
 
 
-def command_input(cmd, datain):
+def command_input(cmd, datain, raises=False):
     """ Use this if you want to send data to stdin
     """
     p = Popen(cmd, shell=True, stdin=PIPE, stdout=PIPE, stderr=PIPE)
     p.communicate(datain)
+    if p.returncode and raises:
+        raise RuntimeError("Error while executing<{}>".format(cmd))
     return p.returncode
 
 

@@ -116,16 +116,24 @@ def get_container_ip(container, raises=False):
     return docker_cmd.stdout.strip()
 
 
-def docker_exec(cmd, container, user=None, stdout_only=True, status_only=False, raises=False):
+def docker_exec(cmd, container, user=None, raises=False, status_only=False, stdout_only=True):
+    """ Executes a command on a running container via 'docker exec'
+    :param cmd: the command to execute
+    :param container: the target container
+    :param user: an optional user (defaults to root)
+    :param raises: if True, will raise a RuntimeError exception if command fails (return code != 0)
+    :param status_only: If True, will return True if command succeeds, False if it fails
+    :param stdout_only: If True, will return stdout as a string (default=True)
+    :return: a subprocess.Popen object, or a string if stdout_only=True, or a boolean if status_only=True
+    """
     docker_cmd = 'docker exec -i {} {} {}'.format('-u {}'.format(user) if user else '', container, cmd)
-    # TODO should return status
-    if status_only:
-        return not utils.command(docker_cmd)
     dock = utils.Command(docker_cmd)
     if raises and dock.returncode:
         raise RuntimeError(
             "Error while executing <{}> on {}: [{}]".
                 format(docker_cmd, container, dock.stderr.strip() or dock.returncode))
+    if status_only:
+        return not dock.returncode
     if stdout_only:
         return dock.stdout
     return dock
@@ -138,7 +146,6 @@ def docker_network(name, cmd='create', raises=True):
     ret = utils.command('docker network {} {}'.format(cmd, name))
     if ret and raises:
         raise RuntimeError("Could not {} network {}".format(cmd, name))
-    return not ret
 
 
 def network_connect(network, container):
@@ -146,41 +153,46 @@ def network_connect(network, container):
         raise RuntimeError("Could not connect {} to network {}".format(container, network))
 
 
-def path_exists(path, container):
-    return docker_exec('test -e {}'.format(path), container, status_only=True)
-
-
 def put_data(data, dest, container, append=False, user=None, perms=None):
     if append and not path_exists(dest, container):
         docker_exec('touch {}'.format(dest), container)
     docker_cmd = 'docker exec -i {} /bin/bash -c "cat {} {}"'.format(container, '>>' if append else '>', dest)
-    utils.command_input(docker_cmd, data)
+    utils.command_input(docker_cmd, data, raises=True)
     if user:
         set_user(dest, user, container)
     if perms:
         set_permissions(dest, perms, container)
-    return True
+
+
+def put_file(source, dest, container, user=None, perms=None):
+    docker_cmd = 'docker cp {} {}:{}'.format(source, container, dest)
+    utils.command(docker_cmd, raises=True)
+    if user:
+        set_user(dest, user, container)
+    if perms:
+        set_permissions(dest, perms, container)
+
+
+def put_directory(source, dest, container):
+    docker_exec('mkdir -p {}'.format(dest), container, raises=True)
+    with utils.cd(source):
+        ret = utils.command('tar zc * | docker exec -i {} tar zx -C {}'.format(container, dest))
+        if ret:
+            raise RuntimeError("Error while copying {} to {}:{}".format(source, container, dest))
 
 
 def get_data(source, container):
     return docker_exec('cat {}'.format(source), container, raises=True)
 
 
-def put_file(source, dest, container, user=None, perms=None):
-    docker_cmd = 'docker cp {} {}:{}'.format(source, container, dest)
-    ret = utils.command(docker_cmd)
-    if ret:
-        raise RuntimeError("Error while executing<{}> on {}".format(docker_cmd, container))
-    if user:
-        set_user(dest, user, container)
-    if perms:
-        set_permissions(dest, perms, container)
-    return True
+def path_exists(path, container):
+    return docker_exec('test -e {}'.format(path), container, status_only=True)
 
 
-def put_directory(source, dest, container):
-    with utils.cd(source):
-        return not utils.command('tar zc * | docker exec -i {} tar zx -C {}'.format(container, dest))
+def create_user(user, groups=(), home=None, shell=None):
+    """ Create a user with optional groups, home and shell
+    """
+    pass
 
 
 def set_user(path, user, container, group=None):

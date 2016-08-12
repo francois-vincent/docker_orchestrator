@@ -275,6 +275,7 @@ class PlatformManager(utils.Sequencer):
             else:
                 for w in wait_process:
                     self.wait_process(w)
+        return self
 
 
 class DeployedPlatformManager(PlatformManager):
