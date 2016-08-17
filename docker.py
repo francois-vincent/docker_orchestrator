@@ -172,6 +172,9 @@ class PlatformManager(utils.Sequencer):
             return docker_exec(cmd, self.containers[host], status_only=status_only)
         return {k: docker_exec(cmd, v, status_only=status_only) for k, v in self.containers.iteritems()}
 
+    def create_user(self, user, groups=(), home=None, shell=None, host=None):
+        pass
+
     def put_data(self, data, dest, host=None, append=False):
         containers = [self.containers[host]] if host else self.containers.itervalues()
         for container in containers:
@@ -218,14 +221,16 @@ class PlatformManager(utils.Sequencer):
 
     def wait_process(self, proc, raises=True):
         for container in self.containers.itervalues():
-            if not wait_running_command(proc, container, timeout=self.timeout):
+            if not wait_running_process(proc, container, timeout=self.timeout):
                 if raises:
                     raise RuntimeError("Container {} has no running '{}'".format(container, proc))
                 return
         return True
 
-    def create_user(self, user, groups=(), home=None, shell=None, host=None):
-        pass
+    def get_processes(self, filter=None, host=None):
+        if host:
+            return get_processes(self.containers[host], filter)
+        return {k: get_processes(v, filter) for k, v in self.containers.iteritems()}
 
     def start_services(self, *args, **kwargs):
         """ start services on the platform

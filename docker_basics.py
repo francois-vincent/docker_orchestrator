@@ -214,18 +214,24 @@ def set_permissions(path, perms, container, recursive=False):
 
 
 def get_version(app, container):
-    text = docker_exec('apt-cache policy {}'.format(app), container, user='root')
+    output = docker_exec('apt-cache policy {}'.format(app), container, user='root')
     try:
-        return utils.extract_column(utils.filter_column(text, 0, startswith='Install'), 1, sep=':')[0]
+        return utils.extract_column(utils.filter_column(output, 0, startswith='Install'), 1, sep=':')[0]
     except IndexError:
-        return None
+        pass
 
 
-def wait_running_command(cmd, container, timeout=1):
+def wait_running_process(cmd, container, timeout=1):
     count, step = timeout, 0.2
     while count > 0:
-        if cmd in docker_exec('ps ax', container):
+        if cmd in utils.extract_column(docker_exec('ps -A', container, user='root'), -1, 1):
             return True
         time.sleep(step)
         count -= step
-    return False
+
+
+def get_processes(container, filter=None):
+    processes = utils.extract_column(docker_exec('ps -A', container, user='root'), -1, 1)
+    if filter is None:
+        return processes
+    return [proc for proc in processes if filter in proc]

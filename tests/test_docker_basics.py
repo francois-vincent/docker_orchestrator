@@ -118,3 +118,9 @@ def test_put_directory():
     put_directory('.', '/root/subdir', 'toto')
     for file in glob.glob('*'):
         assert path_exists(os.path.join('/root/subdir', file), 'toto')
+
+
+def test_get_processes():
+    basic_setup()
+    assert get_processes('toto')
+    assert get_processes('toto', 'sshd')

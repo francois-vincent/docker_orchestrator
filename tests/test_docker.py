@@ -76,6 +76,13 @@ def test_put_file():
         assert platform.path_exists('/root/testdir/dummy.txt')
 
 
+def test_get_processes():
+    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
+        processes = platform.get_processes()
+        assert processes['host1'] == platform.get_processes('host1')
+        assert processes['host2'] == platform.get_processes('host2')
+
+
 def test_ssh():
     with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
         assert platform.ssh('pwd') == {'host1': '/root\n', 'host2': '/root\n'}

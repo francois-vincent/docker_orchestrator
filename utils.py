@@ -182,19 +182,3 @@ def scp(source, dest, host, user='root'):
     keys = os.path.join(ROOTDIR, 'images/keys/unsecure_key')
     return command('scp -o UserKnownHostsFile=/dev/null -o StrictHostKeyChecking=no -i {keys} '
              '{source} {user}@{host}:{dest}'.format(**locals()))
-
-
-# =================== REMOTE HOSTS RELATED UTILITIES =======================
-
-
-def get_processes(platform, host):
-    return extract_column(platform.docker_exec('ps -A', host), -1, 1)
-
-
-def get_version(platform, app, host):
-    text = platform.docker_exec('apt-cache policy {}'.format(app), host)
-    try:
-        return extract_column(filter_column(text, 0, startswith='Install'), 1, sep=':')[0]
-    except IndexError:
-        return None
-
