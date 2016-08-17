@@ -197,10 +197,19 @@ def path_exists(path, container):
     return docker_exec('test -e {}'.format(path), container, status_only=True)
 
 
-def create_user(user, groups=(), home=None, shell=None):
+def create_user(user, container, groups=(), home=None, shell=None):
     """ Create a user with optional groups, home and shell
     """
-    pass
+    cmd = 'useradd {}{}{}'.\
+        format(user,
+               ' -d {}'.format(home) if home else '',
+               ' -s {}'.format(shell) if shell else '')
+    docker_exec(cmd, container)
+    existing_groups = utils.extract_column(docker_exec('cat /etc/group', container), 0, sep=':')
+    for group in groups:
+        if group not in existing_groups:
+            docker_exec('addgroup {}'.format(group), container)
+        docker_exec('usermod -a -G {} {}'.format(group, user), container)
 
 
 def path_set_user(path, user, container, group=None, recursive=False):

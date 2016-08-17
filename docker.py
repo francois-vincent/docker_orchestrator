@@ -173,7 +173,10 @@ class PlatformManager(utils.Sequencer):
         return {k: docker_exec(cmd, v, status_only=status_only) for k, v in self.containers.iteritems()}
 
     def create_user(self, user, groups=(), home=None, shell=None, host=None):
-        pass
+        containers = [self.containers[host]] if host else self.containers.itervalues()
+        for container in containers:
+            create_user(user, container, groups, home, shell)
+        return self
 
     def put_data(self, data, dest, host=None, append=False):
         containers = [self.containers[host]] if host else self.containers.itervalues()

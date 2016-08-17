@@ -14,9 +14,9 @@ ligne 2
 
 
 def basic_setup():
-    docker_build(image)
     container_stop('toto')
     container_delete('toto')
+    docker_build(image)
     docker_run(image, 'toto')
 
 
@@ -98,6 +98,14 @@ def test_put_file():
     # check directory path
     put_file(file, '/root', 'toto')
     assert data == get_data('/root/dummy1.txt', 'toto')
+
+
+def test_create_user():
+    basic_setup()
+    create_user('toto', 'toto')
+    assert docker_exec('groups toto', 'toto') == 'toto : toto\n'
+    create_user('titi', 'toto', ('group1', 'group2'))
+    assert docker_exec('groups titi', 'toto') == 'titi : titi group1 group2\n'
 
 
 def test_set_user_permissions():

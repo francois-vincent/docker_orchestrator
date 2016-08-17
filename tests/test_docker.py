@@ -59,6 +59,12 @@ def test_docker_exec():
         assert platform.docker_exec('pwd', host='host1') == '/\n'
 
 
+def test_create_user():
+    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
+        platform.create_user('toto')
+        assert platform.docker_exec('groups toto') == {'host1': 'toto : toto\n', 'host2': 'toto : toto\n'}
+
+
 def test_put_get_data():
     with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
         platform.docker_exec('mkdir /root/testdir')
