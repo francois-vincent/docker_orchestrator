@@ -67,7 +67,7 @@ def test_docker_exec_user():
     assert docker_exec('touch /root/toto', 'toto', status_only=True)
     assert docker_exec('ls -al /root | grep toto', 'toto').startswith(('-rw-r--r--  1 root root'))
     assert docker_exec('mkdir -p /var/www', 'toto', status_only=True)
-    assert set_user('/var/www', 'www-data', 'toto', 'www-data')
+    assert path_set_user('/var/www', 'www-data', 'toto', 'www-data')
     assert docker_exec('touch /var/www/titi', 'toto', user='www-data', status_only=True)
     assert docker_exec('ls -al /var/www | grep titi', 'toto').startswith(('-rw-r--r--  1 www-data www-data'))
 
@@ -90,9 +90,14 @@ def test_put_data():
 def test_put_file():
     basic_setup()
     file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
-    put_file(file, '/root/dummy.txt', 'toto')
     with open(file, 'r') as f:
-        assert f.read() == get_data('/root/dummy.txt', 'toto')
+        data = f.read()
+    # check full file path
+    put_file(file, '/root/dummy.txt', 'toto')
+    assert data == get_data('/root/dummy.txt', 'toto')
+    # check directory path
+    put_file(file, '/root', 'toto')
+    assert data == get_data('/root/dummy1.txt', 'toto')
 
 
 def test_set_user_permissions():
@@ -100,9 +105,9 @@ def test_set_user_permissions():
     file = os.path.join(ROOTDIR, 'tests/dummy1.txt')
     put_file(file, '/root/dummy.txt', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 root root'))
-    assert set_user('/root/dummy.txt', 'www-data', 'toto')
+    assert path_set_user('/root/dummy.txt', 'www-data', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 www-data root'))
-    assert set_user('/root/dummy.txt', 'www-data', 'toto', group='www-data')
+    assert path_set_user('/root/dummy.txt', 'www-data', 'toto', group='www-data')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rw-rw-r--  1 www-data www-data'))
     assert set_permissions('/root/dummy.txt', '0744', 'toto')
     assert docker_exec('ls -al /root | grep dummy', 'toto').startswith(('-rwxr--r--  1 www-data www-data'))

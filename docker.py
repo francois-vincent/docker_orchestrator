@@ -13,7 +13,7 @@ class PlatformManager(utils.Sequencer):
     """
 
     def __init__(self, platform, images, common_parameters='', parameters={},
-                 network=None, user='root', timeout=1):
+                 network=None, user=None, timeout=1):
         """
         :param platform: string
         :param images: dictionary/pair iterable of container-name:image
@@ -167,43 +167,6 @@ class PlatformManager(utils.Sequencer):
                 raise RuntimeError("Expecting {} running containers, found {}".format(expected, found))
         return self.hosts_ips
 
-    def wait_process(self, proc, raises=True):
-        for container in self.containers.itervalues():
-            if not wait_running_command(proc, container, timeout=self.timeout):
-                if raises:
-                    raise RuntimeError("Container {} has no running '{}'".format(container, proc))
-                return
-        return True
-
-    def ssh(self, cmd, host=None):
-        """ this method requires that an ssh daemon is running on the target
-            and that an authorized_keys file is set with a rsa plubilc key,
-            all conditions met by images provided in this project.
-        """
-        if host:
-            return utils.ssh(cmd, get_container_ip(self.containers[host]), self.user)
-        return {k: utils.ssh(cmd, get_container_ip(v), self.user) for k, v in self.containers.iteritems()}
-
-    def scp(self, source, dest, host=None):
-        """ this method requires that an ssh daemon is running on the target
-            and that an authorized_keys file is set with a rsa plubilc key,
-            all conditions met by images provided in this project.
-        """
-        containers = [self.containers[host]] if host else self.containers.itervalues()
-        for container in containers:
-            utils.scp(source, dest, get_container_ip(container), self.user)
-        return self
-
-    def ssh_put_data(self, data, dest, host=None, append=False):
-        if not append:
-            self.ssh('touch {}'.format(dest), host)
-        cmd = ''.join(('echo "', data, '" >>' if append else '" >', dest))
-        self.ssh(cmd, host)
-        return self
-
-    def ssh_get_data(self, source, host=None):
-        return self.ssh('cat {}'.format(source), host)
-
     def docker_exec(self, cmd, host=None, status_only=False):
         if host:
             return docker_exec(cmd, self.containers[host], status_only=status_only)
@@ -212,13 +175,13 @@ class PlatformManager(utils.Sequencer):
     def put_data(self, data, dest, host=None, append=False):
         containers = [self.containers[host]] if host else self.containers.itervalues()
         for container in containers:
-            put_data(data, dest, container, append=append)
+            put_data(data, dest, container, append=append, user=self.user)
         return self
 
-    def put_file(self, data, dest, host=None, append=False):
+    def put_file(self, source, dest, host=None):
         containers = [self.containers[host]] if host else self.containers.itervalues()
         for container in containers:
-            put_data(data, dest, container, append=append)
+            put_file(source, dest, container, user=self.user)
         return self
 
     def get_data(self, source, host=None):
@@ -253,6 +216,17 @@ class PlatformManager(utils.Sequencer):
             docker_commit(v, images[k])
         return self
 
+    def wait_process(self, proc, raises=True):
+        for container in self.containers.itervalues():
+            if not wait_running_command(proc, container, timeout=self.timeout):
+                if raises:
+                    raise RuntimeError("Container {} has no running '{}'".format(container, proc))
+                return
+        return True
+
+    def create_user(self, user, groups=(), home=None, shell=None, host=None):
+        pass
+
     def start_services(self, *args, **kwargs):
         """ start services on the platform
         :param args: sequence of services to start on all hosts.
@@ -262,7 +236,7 @@ class PlatformManager(utils.Sequencer):
         wait_process = kwargs.pop('wait_process', None)
         for service in args:
             self.docker_exec('service {} start'.format(service))
-        hosts_keys = set(kwargs).issubset(set(self.images.keys()))
+        hosts_keys = set(kwargs).issubset(set(self.images))
         for k, v in kwargs.iteritems():
             for x in v:
                 if hosts_keys:
@@ -277,6 +251,25 @@ class PlatformManager(utils.Sequencer):
                     self.wait_process(w)
         return self
 
+    def ssh(self, cmd, host=None):
+        """ this method requires that an ssh daemon is running on the target
+            and that an authorized_keys file is set with a rsa plubilc key,
+            all conditions met by images provided in this project.
+        """
+        if host:
+            return utils.ssh(cmd, get_container_ip(self.containers[host]), self.user or 'root')
+        return {k: utils.ssh(cmd, get_container_ip(v), self.user or 'root') for k, v in self.containers.iteritems()}
+
+    def scp(self, source, dest, host=None):
+        """ this method requires that an ssh daemon is running on the target
+            and that an authorized_keys file is set with a rsa plubilc key,
+            all conditions met by images provided in this project.
+        """
+        containers = [self.containers[host]] if host else self.containers.itervalues()
+        for container in containers:
+            utils.scp(source, dest, get_container_ip(container), self.user or 'root')
+        return self
+
 
 class DeployedPlatformManager(PlatformManager):
     """ Class that manages the deployed platform, essentially through specific images and
@@ -284,18 +277,18 @@ class DeployedPlatformManager(PlatformManager):
         Here the subclass PlatformManager is used as a mixin (constructor not called).
     """
 
-    def __init__(self, platform, distri):
+    def __init__(self, platform, manager, **kwargs):
         self.platform = platform
+        self.manager = manager
+        self.__dict__.update(kwargs)
         self.platform_name = platform.platform_name
         self.parameters = platform.parameters
         self.user = platform.user
         self.timeout = platform.timeout
-        self.distri = distri
         self.images = {k: '-'.join((v, self.platform_name, k)) for k, v in platform.images.iteritems()}
         self.containers = {k: '-'.join((v, 'deployed')) for k, v in self.images.iteritems()}
         self.images_names = set(self.images.values())
         self.containers_names = self.containers.values()
-        self.managers = {}
 
     def setup(self, reset=None):
         fabric = self.platform.get_manager('fabric')

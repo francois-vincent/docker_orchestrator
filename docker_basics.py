@@ -154,12 +154,20 @@ def network_connect(network, container):
 
 
 def put_data(data, dest, container, append=False, user=None, perms=None):
+    """ Copy data to a file with optional append and user/perms settings.
+    :param data: byte string of data
+    :param dest: file path on target container. The directory must exist
+    :param container: container name
+    :param append: if True, the data is appended to the file, otherwise, the file is created or overwritten
+    :param user: if not None, set user of dest to this user
+    :param perms: if not None, set perms of dest to these perms. Format like chmod
+    """
     if append and not path_exists(dest, container):
         docker_exec('touch {}'.format(dest), container)
     docker_cmd = 'docker exec -i {} /bin/bash -c "cat {} {}"'.format(container, '>>' if append else '>', dest)
     utils.command_input(docker_cmd, data, raises=True)
     if user:
-        set_user(dest, user, container)
+        path_set_user(dest, user, container)
     if perms:
         set_permissions(dest, perms, container)
 
@@ -168,7 +176,7 @@ def put_file(source, dest, container, user=None, perms=None):
     docker_cmd = 'docker cp {} {}:{}'.format(source, container, dest)
     utils.command(docker_cmd, raises=True)
     if user:
-        set_user(dest, user, container)
+        path_set_user(dest, user, container)
     if perms:
         set_permissions(dest, perms, container)
 
@@ -195,13 +203,13 @@ def create_user(user, groups=(), home=None, shell=None):
     pass
 
 
-def set_user(path, user, container, group=None):
-    cmd = 'chown {}{} {}'.format(user, ':{}'.format(group) if group else '', path)
+def path_set_user(path, user, container, group=None, recursive=False):
+    cmd = 'chown{} {}{} {}'.format(' -R' if recursive else '', user, ':{}'.format(group) if group else '', path)
     return docker_exec(cmd, container, status_only=True, raises=True)
 
 
-def set_permissions(path, perms, container):
-    cmd = 'chmod {} {}'.format(perms, path)
+def set_permissions(path, perms, container, recursive=False):
+    cmd = 'chmod{} {} {}'.format(' -R' if recursive else '', perms, path)
     return docker_exec(cmd, container, status_only=True, raises=True)
 
 

@@ -47,10 +47,10 @@ def test_get_hosts():
             assert 0, "Should raise a RuntimeError, raised {}".format(e)
 
 
-def test_ssh():
+def test_network():
     with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
-        assert platform.ssh('pwd') == {'host1': '/root\n', 'host2': '/root\n'}
-        assert platform.ssh('pwd', host='host1') == '/root\n'
+        assert platform.docker_exec('ping -c 1 {}'.format(platform.containers['host2']), 'host1', True)
+        assert platform.docker_exec('ping -c 1 {}'.format(platform.containers['host1']), 'host2', True)
 
 
 def test_docker_exec():
@@ -59,12 +59,35 @@ def test_docker_exec():
         assert platform.docker_exec('pwd', host='host1') == '/\n'
 
 
+def test_put_get_data():
+    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
+        platform.docker_exec('mkdir /root/testdir')
+        platform.put_data('fluctuat nec mergitur', '/root/testdir/bob.txt')
+        assert platform.get_data('/root/testdir/bob.txt') == {'host1': 'fluctuat nec mergitur', 'host2': 'fluctuat nec mergitur'}
+
+
+def test_put_file():
+    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
+        platform.docker_exec('mkdir /root/testdir')
+        platform.put_file(os.path.join(ROOTDIR, 'dummy2.txt'), '/root/testdir')
+        assert platform.path_exists('/root/testdir/dummy2.txt')
+        assert platform.get_data('/root/testdir/dummy2.txt') == {'host1': 'hello world', 'host2': 'hello world'}
+        platform.put_file(os.path.join(ROOTDIR, 'dummy2.txt'), '/root/testdir/dummy.txt')
+        assert platform.path_exists('/root/testdir/dummy.txt')
+
+
+def test_ssh():
+    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
+        assert platform.ssh('pwd') == {'host1': '/root\n', 'host2': '/root\n'}
+        assert platform.ssh('pwd', host='host1') == '/root\n'
+
+
 def test_ssh_put_file_exists():
     with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
         platform.ssh('mkdir /root/testdir')
         platform.scp(os.path.join(ROOTDIR, 'dummy2.txt'), '/root/testdir')
-        assert platform.ssh('cat /root/testdir/dummy2.txt') == {'host1': 'hello world', 'host2': 'hello world'}
         assert platform.path_exists('/root/testdir/dummy2.txt')
+        assert platform.ssh('cat /root/testdir/dummy2.txt') == {'host1': 'hello world', 'host2': 'hello world'}
         platform.ssh('rm -f /root/testdir/dummy2.txt', 'host1')
         assert platform.path_exists('/root/testdir/dummy2.txt', 'host2')
         assert not platform.path_exists('/root/testdir/dummy2.txt', 'host1')
@@ -79,16 +102,3 @@ def test_put_file_exists():
         platform.docker_exec('rm -f /root/testdir/dummy2.txt', 'host1')
         assert platform.path_exists('/root/testdir/dummy2.txt', 'host2')
         assert not platform.path_exists('/root/testdir/dummy2.txt', 'host1')
-
-
-def test_put_get_data():
-    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
-        platform.docker_exec('mkdir /root/testdir')
-        platform.put_data('fluctuat nec mergitur', '/root/testdir/bob.txt')
-        assert platform.get_data('/root/testdir/bob.txt') == {'host1': 'fluctuat nec mergitur', 'host2': 'fluctuat nec mergitur'}
-
-
-def test_network():
-    with PlatformManager('test', {'host1': 'testimage', 'host2': 'testimage'}).standard_setup() as platform:
-        assert platform.docker_exec('ping -c 1 {}'.format(platform.containers['host2']), 'host1', True)
-        assert platform.docker_exec('ping -c 1 {}'.format(platform.containers['host1']), 'host2', True)

@@ -6,7 +6,7 @@ RUN apt-get install -y python2.7-dev python-pip locales sudo git logrotate vim
 RUN apt-get remove -y systemd
 RUN pip install --upgrade pip virtualenv
 
-# set locale to French
+# set locale to US
 RUN sed -i "/^# en_US.UTF-8 UTF-8/c\en_US.UTF-8 UTF-8" /etc/locale.gen
 RUN locale-gen en_US.UTF-8
 COPY debian8/.bashrc /root/.bashrc
