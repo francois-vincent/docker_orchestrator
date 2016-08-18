@@ -43,7 +43,7 @@ def test_get_containers():
     assert get_containers('toto') == ['toto']
     assert get_containers('toto', all=False) == ['toto']
     assert get_containers(('toto', )) == ['toto']
-    assert set(get_containers(image=image)) == {'toto', 'titi'}
+    assert set(get_containers(image=image)).issuperset(('toto', 'titi'))
     container_stop('toto', 'titi')
     assert get_containers('toto', all=False) == []
     assert get_containers('toto') == ['toto']
